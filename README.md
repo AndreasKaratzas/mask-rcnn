@@ -1,8 +1,6 @@
 # Custom Mask R-CNN implementation
 
 * TODO: Introduction to project
-* TODO: Save from `Visual`, don't display
-* TODO: Check color list to be equal in element number to that of the masks
 
 ### Prerequisites
 
