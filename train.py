@@ -23,7 +23,7 @@ from lib.dataloader import CustomDataset
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='PyTorch image segmentation with Mask R-CNN model.')
-    parser.add_argument('--project', default='Math 522', help='Alias of project.')
+    parser.add_argument('--project', default='Mask R-CNN', help='Alias of project.')
     parser.add_argument('--root-dir', default='./data', help='Root directory to output data.')
     parser.add_argument('--dataset', default='../data', help='Path to dataset.')
     parser.add_argument('--img-size', default=800, type=int, help='Minimum image size.')

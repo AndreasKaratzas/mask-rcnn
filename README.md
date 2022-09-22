@@ -24,9 +24,19 @@ To train Mask R-CNN with custom data, use the training script:
 python train.py 
 ```
 
+To customize the training process, use arguments as demonstrated below:
+```powershell
+python train.py --dataset='../data-mask' --img-size 800 --batch-size 4 --epochs 2 --subset-ratio 0.05 --backbone='resnet18' --num-workers 4
+```
+
 You can also test your models after training them using the testing script:
 ```powershell
 python test.py
+```
+
+Similarly, you can customize the testing process using arguments:
+```powershell
+python test.py --model-checkpoint='./data/202X-XX-XXTXX-XX-XX/model/best.pt' --dataset='../data-mask'
 ```
 
 ### Experiments
