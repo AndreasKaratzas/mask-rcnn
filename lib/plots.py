@@ -29,7 +29,7 @@ def slugify(value, allow_unicode=False):
 
 def export_training_plots(root_dir: str, out_dir: str, dpi: int = 300):
     training_res_data = pd.read_csv(os.path.join(
-        root_dir, 'training'), delim_whitespace=True)
+        root_dir, 'training.log'), delim_whitespace=True)
 
     train_res_preprocessed = training_res_data.groupby(
         by="Epoch", dropna=False).mean()
@@ -49,18 +49,16 @@ def export_training_plots(root_dir: str, out_dir: str, dpi: int = 300):
 
 def export_validation_plots(root_dir: str, out_dir: str, dpi: int = 300):
     validation_res_data = pd.read_csv(os.path.join(
-        root_dir, 'validation'), delim_whitespace=True)
+        root_dir, 'validation.log'), delim_whitespace=True)
 
     validation_res_data = validation_res_data.astype({'MaxDets': 'str'})
-    validation_res_data = validation_res_data.astype({'IoUType': 'str'})
-    
+
     validation_res_data["Key"] = validation_res_data["Title"].map(
         lambda x: x.lstrip('Average')) + \
-            ' ' + validation_res_data["IoU"] + \
-            ' ' + validation_res_data["Area"] + \
-            ' ' + validation_res_data["MaxDets"] + \
-            ' ' + validation_res_data["IoUType"]
-    
+        ' ' + validation_res_data["IoU"] + \
+        ' ' + validation_res_data["Area"] + \
+        ' ' + validation_res_data["MaxDets"]
+
     column_values = validation_res_data[["Key"]].values.ravel()
     unique_values = pd.unique(column_values)
 
@@ -68,11 +66,11 @@ def export_validation_plots(root_dir: str, out_dir: str, dpi: int = 300):
     for value in unique_values:
         val_res_preprocessed.append(
             validation_res_data[validation_res_data["Key"] == value])
-    
+
     for validation_metric in val_res_preprocessed:
         plt_title = validation_metric[["Key"]].values.ravel()
         plt_title = pd.unique(plt_title)
-        
+
         plt.figure()
         plt.tight_layout()
         plt.title(plt_title.item())
@@ -104,12 +102,12 @@ if __name__ == '__main__':
             f"Root directory is invalid. Value parsed {args.root_dir}.")
     if not Path(args.out_dir).is_dir():
         Path(args.out_dir).mkdir(parents=True, exist_ok=True)
-    
-    if not os.path.isfile(os.path.join(args.root_dir, 'training')):
+
+    if not os.path.isfile(os.path.join(args.root_dir, 'training.log')):
         raise ValueError(
-            f"Training data file not found. Tried to access {os.path.join(args.root_dir, 'training')}.")
-    if not os.path.isfile(os.path.join(args.root_dir, 'validation')):
+            f"Training data file not found. Tried to access {os.path.join(args.root_dir, 'training.log')}.")
+    if not os.path.isfile(os.path.join(args.root_dir, 'validation.log')):
         raise ValueError(
-            f"Validation data file not found. Tried to access {os.path.join(args.root_dir, 'validation')}.")
+            f"Validation data file not found. Tried to access {os.path.join(args.root_dir, 'validation.log')}.")
 
     experiment_data_plots(root_dir=args.root_dir, out_dir=args.out_dir)

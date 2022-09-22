@@ -59,11 +59,12 @@ def rgb_converter(input_filepath: str, output_dir: str, video_id: str, video_sta
 
     if not os.path.exists(main_out_path):
         os.makedirs(main_out_path, exist_ok=True)
-    
+
     i = 0
     for frame in frame_iter(video_capture, 'Extracting images from RGB video ', video_stats.get('Number_of_frames'), ' frames extracted'):
         i += 1
-        cv2.imwrite(os.path.join(main_out_path, 'frame_' + str(i) + '.png'), frame)
+        cv2.imwrite(os.path.join(main_out_path,
+                    'frame_' + str(i) + '.png'), frame)
 
 
 def gray_converter(input_filepath: str, output_dir: str, video_id: str, video_stats: Dict[str, float]):
@@ -72,12 +73,13 @@ def gray_converter(input_filepath: str, output_dir: str, video_id: str, video_st
 
     if not os.path.exists(main_out_path):
         os.makedirs(main_out_path, exist_ok=True)
-    
+
     i = 0
     for frame in frame_iter(video_capture, 'Extracting images in grayscale from RGB video ', video_stats.get('Number_of_frames'), ' frames extracted'):
         i += 1
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        cv2.imwrite(os.path.join(main_out_path, 'frame_' + str(i) + '.png'), gray)
+        cv2.imwrite(os.path.join(main_out_path,
+                    'frame_' + str(i) + '.png'), gray)
 
 
 def spatiotemporal_converter(input_filepath: str, output_dir: str, video_id: str, video_stats: Dict[str, float]):
@@ -89,15 +91,16 @@ def spatiotemporal_converter(input_filepath: str, output_dir: str, video_id: str
 
     img = np.zeros((3, video_stats.get('Height'),
                    video_stats.get('Width')), dtype=np.uint8)
-    
+
     i = 0
     for frame in frame_iter(video_capture, 'Extracting images in grayscale from RGB video ', video_stats.get('Number_of_frames'), ' frames extracted'):
         img[i % 3] = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         if (i % 3 == 0) and (i > 0):
             spatiotemporal = np.transpose(spatiotemporal, (1, 2, 0))
-            cv2.imwrite(os.path.join(main_out_path, 'frame_' + str(i) + '.png'), spatiotemporal)
-        
+            cv2.imwrite(os.path.join(main_out_path, 'frame_' +
+                        str(i) + '.png'), spatiotemporal)
+
         spatiotemporal = img.copy()
 
         i += 1
@@ -122,11 +125,11 @@ def main():
         video_id = os.path.splitext(tail)[0]
         video_stats = get_video_stats(input_video_filepath)
         print_video_stats(input_video_filepath, video_stats)
-        
+
         gray_converter(
-            input_filepath=input_video_filepath, 
-            output_dir=output_root_dir, 
-            video_id=video_id, 
+            input_filepath=input_video_filepath,
+            output_dir=output_root_dir,
+            video_id=video_id,
             video_stats=video_stats
         )
 

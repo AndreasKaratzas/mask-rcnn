@@ -1,10 +1,9 @@
 
 import time
-import torch
-import datetime
-import torch.distributed as dist
+from collections import defaultdict, deque
 
-from collections import deque, defaultdict
+import torch
+import torch.distributed as dist
 
 from lib.utils import is_dist_avail_and_initialized
 
@@ -77,8 +76,8 @@ class MetricLogger(object):
         self.meters = defaultdict(SmoothedValue)
         self.delimiter = delimiter
         self.export_filepath = f_path
-        self.log_message = []           
-        
+        self.log_message = []
+
     def update(self, **kwargs):
         for k, v in kwargs.items():
             if isinstance(v, torch.Tensor):
@@ -109,85 +108,56 @@ class MetricLogger(object):
     def add_meter(self, name, meter):
         self.meters[name] = meter
 
-    def log_every(self, iterable, print_freq, epoch: int = None):
+    def log_every(self, iterable, epoch: int = None):
         i = 1
         if epoch is None:
             raise ValueError(f'Invalid epoch argument ({type(epoch)})')
-        
-        if epoch == -1:
-            header = 'Test:'
-        else:
-            header = 'Epoch: [{}]'.format(epoch)
-        
+
         start_time = time.time()
         end = time.time()
         iter_time = SmoothedValue(fmt='{avg:.4f}')
         data_time = SmoothedValue(fmt='{avg:.4f}')
-        space_fmt = ':' + str(len(str(len(iterable)))) + 'd'
-        if torch.cuda.is_available():
-            log_msg = self.delimiter.join([
-                header,
-                '[{0' + space_fmt + '}/{1}]',
-                'eta: {eta}',
-                '{meters}',
-                'time: {time}',
-                'data: {data}',
-                'max mem: {memory:.0f}'
-            ])
-        else:
-            log_msg = self.delimiter.join([
-                header,
-                '[{0' + space_fmt + '}/{1}]',
-                'eta: {eta}',
-                '{meters}',
-                'time: {time}',
-                'data: {data}'
-            ])
-        MB = 1024.0 * 1024.0
+
         for obj in iterable:
             data_time.update(time.time() - end)
             yield obj
             iter_time.update(time.time() - end)
-            if i % print_freq == 0 or i == len(iterable):
-                eta_seconds = iter_time.global_avg * (len(iterable) - i)
-                eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
-                
-                log_dict = {
-                    'epoch': int(epoch)
-                }
 
-                if torch.cuda.is_available():
-                    print(log_msg.format(
-                        i, len(iterable), eta=eta_string,
-                        meters=str(self),
-                        time=str(iter_time), data=str(data_time),
-                        memory=torch.cuda.max_memory_allocated() / MB))
-                
-                    log_dict['memory'] = int(round(
-                        torch.cuda.max_memory_allocated() / MB))
+            log_dict = {
+                'epoch': int(epoch)
+            }
 
-                else:
-                    print(log_msg.format(
-                        i, len(iterable), eta=eta_string,
-                        meters=str(self),
-                        time=str(iter_time), data=str(data_time)))
-                    
-                    log_dict['memory'] = -1
+            if torch.cuda.is_available():
+                log_dict['memory'] = int(round(
+                    torch.cuda.memory_reserved() / 1E9))
+            else:
+                log_dict['memory'] = 0
 
-                for key in self.meters:
-                    log_dict[key] = round(
-                        float(str(self.meters[key]).split()[0]), 3)
+            for key in self.meters:
+                log_dict[key] = round(
+                    float(str(self.meters[key]).split()[0]), 3)
 
-                self.log_message.append(log_dict)
+            self.log_message.append(log_dict)
+
             i += 1
             end = time.time()
         total_time = time.time() - start_time
-        total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-        print('{} Total time: {} ({:.4f} s / it)'.format(
-            header, total_time_str, total_time / len(iterable)))
-        
         self.time_per_iter = total_time / len(iterable)
-        
+
+    def get_metrics(self):
+
+        self.stats = {}
+        for key in self.meters:
+            self.stats[key] = round(
+                float(str(self.meters[key]).split()[0]), 3)
+
+        return \
+            self.stats.get('loss'),           \
+            self.stats.get('loss_classifier'),\
+            self.stats.get('loss_box_reg'),   \
+            self.stats.get('loss_objectness'),\
+            self.stats.get('loss_rpn_box_reg')
+
     def export_data(self):
         with open(self.export_filepath, "a") as f:
             for entry in self.log_message:
@@ -200,52 +170,3 @@ class MetricLogger(object):
                 )
 
         self.log_message = []
-
-
-class ConfusionMatrix(object):
-    def __init__(self, num_classes: int, export_filepath: str):
-        self.num_classes = num_classes
-        self.mat = None
-        self.export_filepath = export_filepath
-
-    def update(self, a, b):
-        n = self.num_classes
-        if self.mat is None:
-            self.mat = torch.zeros((n, n), dtype=torch.int64, device=a.device)
-        with torch.no_grad():
-            k = (a >= 0) & (a < n)
-            inds = n * a[k].to(torch.int64) + b[k]
-
-    def reset(self):
-        self.mat.zero_()
-
-    def compute(self):
-        h = self.mat.float()
-        acc_global = torch.diag(h).sum() / h.sum()
-        acc = torch.diag(h) / h.sum(1)
-        iu = torch.diag(h) / (h.sum(1) + h.sum(0) - torch.diag(h))
-        return acc_global, acc, iu
-
-    def reduce_from_all_processes(self):
-        if not torch.distributed.is_available():
-            return
-        if not torch.distributed.is_initialized():
-            return
-        torch.distributed.barrier()
-        torch.distributed.all_reduce(self.mat)
-
-    def export_data(self):
-        with open(self.export_filepath, "a") as f:
-            f.write(self.__str__())
-
-    def __str__(self):
-        acc_global, acc, iu = self.compute()
-        return (
-            'global correct: {:.1f}\n'
-            'average row correct: {}\n'
-            'IoU: {}\n'
-            'mean IoU: {:.1f}').format(
-                acc_global.item() * 100,
-                ['{:.1f}'.format(i) for i in (acc * 100).tolist()],
-                ['{:.1f}'.format(i) for i in (iu * 100).tolist()],
-                iu.mean().item() * 100)

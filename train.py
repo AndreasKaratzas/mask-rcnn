@@ -1,15 +1,19 @@
 import os
 import math
+import json
 import torch
 import argparse
+import warnings
 import datetime
+import numpy as np
 import torch.optim as optim
-
+from torch.utils.tensorboard import SummaryWriter
 from pathlib import Path
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, SubsetRandomSampler
 
-from lib.utils import collate_fn
+from lib.utils import collate_fn, colorstr
 from lib.model import configure_model
+from lib.nvidia import cuda_check
 from lib.engine import train, validate
 from lib.plots import experiment_data_plots
 from lib.transformation import get_transform
@@ -18,58 +22,41 @@ from lib.elitism import EliteModel
 from lib.dataloader import CustomDataset
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description='PyTorch image segmentation with Mask R-CNN model.')
-    parser.add_argument('--root-dir', default='./data',
-                        help='Root directory to output data.')
-    parser.add_argument('--dataset', default='../data',
-                        help='Path to dataset.')
-    parser.add_argument('--img-size', default=800,
-                        type=int, help='Minimum image size.')
-    parser.add_argument('--num-classes', default=4, type=int,
-                        help='Number of classes in dataset.')
-    parser.add_argument('--backbone', default='resnet18',
-                        help='Backbone CNN for Mask R-CNN.')
-    parser.add_argument('--batch-size', default=4,
-                        type=int, help='Batch size.')
-    parser.add_argument('--lr-scheduler', default="multisteplr",
-                        help='the lr scheduler (default: multisteplr).')
-    parser.add_argument('--epochs', default=10, type=int,
-                        metavar='N', help='Number of total epochs to run.')
+    parser = argparse.ArgumentParser(description='PyTorch image segmentation with Mask R-CNN model.')
+    parser.add_argument('--project', default='Math 522', help='Alias of project.')
+    parser.add_argument('--root-dir', default='./data', help='Root directory to output data.')
+    parser.add_argument('--dataset', default='../data', help='Path to dataset.')
+    parser.add_argument('--img-size', default=800, type=int, help='Minimum image size.')
+    parser.add_argument('--num-classes', default=4, type=int, help='Number of classes in dataset.')
+    parser.add_argument('--backbone', default='resnet18', help='Backbone CNN for Mask R-CNN.')
+    parser.add_argument('--batch-size', default=4, type=int, help='Batch size.')
+    parser.add_argument('--lr-scheduler', default="multisteplr", help='the lr scheduler (default: multisteplr).')
+    parser.add_argument('--epochs', default=10, type=int, metavar='N', help='Number of total epochs to run.')
     parser.add_argument('--num-workers', default=1, type=int, metavar='N',
                         help='Number of data loading workers (default: 1).')
-    parser.add_argument('--lr', default=5e-3, type=float,
-                        help='Initial learning rate.')
-    parser.add_argument('--momentum', default=0.9,
-                        type=float, metavar='M', help='Momentum.')
-    parser.add_argument('--weight-decay', default=1e-4, type=float,
-                        metavar='W', help='weight decay (default: 1e-4).')
+    parser.add_argument('--lr', default=5e-3, type=float, help='Initial learning rate.')
+    parser.add_argument('--momentum', default=0.9, type=float, metavar='M', help='Momentum.')
+    parser.add_argument('--weight-decay', default=1e-4, type=float, metavar='W', help='weight decay (default: 1e-4).')
     parser.add_argument('--lr-steps', default=[16000, 22000], nargs='+', type=int,
                         help='Decrease lr every step-size epochs.')
-    parser.add_argument('--lr-gamma', default=0.1, type=float,
-                        help='Decrease lr by a factor of lr-gamma.')
-    parser.add_argument('--verbosity', default=5, type=int,
-                        help='Terminal log frequency.')
+    parser.add_argument('--lr-gamma', default=0.1, type=float, help='Decrease lr by a factor of lr-gamma.')
+    parser.add_argument('--subset-ratio', default=0.1, type=float, help='Sample a subset from the training set.')
+    parser.add_argument('--verbosity', default=5, type=int, help='Terminal log frequency.')
     parser.add_argument('--resume', type=str, default=None,
                         help='Resume from given checkpoint. Expecting filepath to checkpoint.')
-    parser.add_argument('--data-augmentation', default="hflip",
-                        help='Data augmentation policy (default: hflip).')
-    parser.add_argument('--pretrained', default=True,
-                        help='Use pre-trained models.', action="store_true")
-    parser.add_argument(
-        '--anchor-sizes', default=[32, 64, 128, 256, 512], nargs='+', type=int, help='Anchor sizes.')
-    parser.add_argument(
-        '--aspect-ratios', default=[0.5, 1.0, 2.0], nargs='+', type=int, help='Anchor ratios.')
-    parser.add_argument('--start-epoch', default=0,
-                        type=int, help='Start epoch.')
+    parser.add_argument('--data-augmentation', default="hflip", help='Data augmentation policy (default: hflip).')
+    parser.add_argument('--pretrained', default=True, help='Use pre-trained models.', action="store_true")
+    parser.add_argument('--anchor-sizes', default=[32, 64, 128, 256, 512], nargs='+', type=int, help='Anchor sizes.')
+    parser.add_argument('--aspect-ratios', default=[0.5, 1.0, 2.0], nargs='+', type=int, help='Anchor ratios.')
+    parser.add_argument('--start-epoch', default=0, type=int, help='Start epoch.')
     args = parser.parse_args()
 
+    warnings.filterwarnings("ignore")
+
     if not Path(args.root_dir).is_dir():
-        raise ValueError(
-            f"Root directory is invalid. Value parsed {args.root_dir}.")
+        raise ValueError(f"Root directory is invalid. Value parsed {args.root_dir}.")
     if not Path(args.dataset).is_dir():
-        raise ValueError(
-            f"Path to dataset is invalid. Value parsed {args.dataset}.")
+        raise ValueError(f"Path to dataset is invalid. Value parsed {args.dataset}.")
     if not os.path.isdir(os.path.join(args.dataset, "train", "images")):
         raise ValueError(f"Path to training image data does not exist.")
     if not os.path.isdir(os.path.join(args.dataset, "train", "masks")):
@@ -81,31 +68,47 @@ if __name__ == "__main__":
 
     # initialize the computation device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(
+        f"Device utilized: {colorstr(options=['red', 'underline'], string_args=list([device]))}.\n")
+    
+    if device == torch.device('cuda'):
+        args.n_devices, cuda_arch = cuda_check()
+        print(
+            f"Found NVIDIA GPU of "
+            f"{colorstr(options=['cyan'], string_args=list([cuda_arch]))} "
+            f"Architecture.")
 
     # dataloader training
     train_data = CustomDataset(
         root_dir=os.path.join(args.dataset, "train"),
-        transforms=get_transform(True, args.data_augmentation)
+        transforms=get_transform("train", args.data_augmentation)
     )
 
     # dataloader validation
     val_data = CustomDataset(
         root_dir=os.path.join(args.dataset, "valid"),
-        transforms=get_transform(False, args.data_augmentation)
+        transforms=get_transform("valid", args.data_augmentation)
     )
 
     print(
-        f'Training Mask R-CNN with model backbone {args.backbone} and anchor'
-        f' sizes {args.anchor_sizes} for {args.epochs} epochs.')
-    print(f'Length of train data {len(train_data)}')
-    print(f'Length of validation data {len(val_data)}')
+        f'Training Mask R-CNN for '
+        f'{colorstr(options=["red", "underline"], string_args=list([str(args.epochs)]))} epoch(s) with model backbone '
+        f'{colorstr(options=["red", "underline"], string_args=list([args.backbone]))} with:\n'
+        f'{colorstr(options=["red", "underline"], string_args=list([" ".join([str(elem) for elem in args.anchor_sizes])])):>50} anchor sizes and\n'
+        f'{colorstr(options=["red", "underline"], string_args=list([" ".join([str(elem) for elem in args.aspect_ratios])])):>50} aspect ratios\n\nDataset stats:\n'
+        f'\tLength of training data:\t{colorstr(options=["red", "underline"], string_args=list([str(int(len(train_data) * args.subset_ratio))])):>20}\n'
+        f'\tLength of validation data:\t{colorstr(options=["red", "underline"], string_args=list([str(int(len(val_data) * args.subset_ratio))])):>20}\n\n')
+
+    train_sampler = SubsetRandomSampler(np.arange(int(len(train_data) * args.subset_ratio)))
+    val_sampler = SubsetRandomSampler(np.arange(int(len(val_data) * args.subset_ratio)))
 
     # dataloader training
     dataloader_train = DataLoader(
         dataset=train_data,
         batch_size=args.batch_size,
-        shuffle=True,
+        shuffle=False,
         num_workers=args.num_workers,
+        sampler=train_sampler,
         collate_fn=collate_fn,
     )
 
@@ -114,6 +117,7 @@ if __name__ == "__main__":
         dataset=val_data,
         batch_size=1,
         shuffle=False,
+        sampler=val_sampler,
         num_workers=args.num_workers,
         collate_fn=collate_fn,
     )
@@ -145,22 +149,36 @@ if __name__ == "__main__":
     log_save_dir.mkdir(parents=True, exist_ok=True)
     plots_save_dir = Path(args.root_dir) / datetime_tag / "plots"
     plots_save_dir.mkdir(parents=True, exist_ok=True)
-    config_save_dir = Path(args.root_dir) / datetime_tag / "CONFIG"
-
+    config_save_dir = Path(args.root_dir) / datetime_tag / "CONFIG.json"
+   
+    # initialize a hyperparameter dictionary
+    hyperparameters = {}
+    # export experiment settings
     with open(config_save_dir, "w") as f:
-        f.write(
-            f'Training Mask R-CNN with model backbone {args.backbone} and anchor'
-            f' sizes {args.anchor_sizes} for {args.epochs} epochs.\n'
-        )
-        f.write(
-            f"Training model from checkpoint {args.resume}. Starting from epoch {args.start_epoch}.\n"
-        )
-        f.write(
-            f"Dataset dir {args.dataset}.\n"
-        )
+        data = {}
 
-    log_save_dir_train = log_save_dir / "training"
-    log_save_dir_validation = log_save_dir / "validation"
+        data['model'] = {
+            'backbone': args.backbone,
+            'anchors': ['{:.2f}'.format(x) for x in args.anchor_sizes],
+            'ratios': ['{:.2f}'.format(x) for x in args.aspect_ratios],
+            'epochs': args.epochs,
+            'checkpoint': args.resume,
+            'start': args.start_epoch
+        }
+
+        data['dataset'] = {
+            'classes': int(args.num_classes),
+            'img_size': args.img_size,
+            'directory': args.dataset
+        }
+
+        json.dump(data, f)
+
+        hyperparameters.update(data['model'])
+        hyperparameters.update(data['dataset'])
+
+    log_save_dir_train = log_save_dir / "training.log"
+    log_save_dir_validation = log_save_dir / "validation.log"
 
     # initialize lr scheduler
     if args.lr_scheduler.lower() == 'multisteplr':
@@ -196,8 +214,11 @@ if __name__ == "__main__":
     with open(log_save_dir_validation, "w") as f:
         f.write(
             f"{'Epoch':>8}{'Title':>20}{'IoU':>15}{'Area':>8}"
-            f"{'MaxDets':>8}{'IoUType':>8}{'Value':>8}\n"
+            f"{'MaxDets':>8}{'Value':>8}\n"
         )
+    
+    # initialize tensorboard instance
+    writer = SummaryWriter(log_save_dir, comment=args.project if args.project else "")
 
     # reconfigure verbosity
     if args.verbosity is not None:
@@ -217,12 +238,39 @@ if __name__ == "__main__":
     # start fitting the model
     for epoch in range(args.start_epoch, args.epochs):
 
-        train_logger = train(model=model, optimizer=optimizer, dataloader=dataloader_train,
-                             device=device,
-                             verbosity=args.verbosity, epoch=epoch, log_filepath=log_save_dir_train)
+        train_logger, lr, loss_acc, loss_classifier_acc, loss_box_reg_acc, loss_objectness_acc, loss_rpn_box_reg_acc = train(
+            model=model, optimizer=optimizer, dataloader=dataloader_train,
+            device=device, verbosity=args.verbosity, epoch=epoch, 
+            log_filepath=log_save_dir_train, epochs=args.epochs)
         train_logger.export_data()
-        validate(model=model, dataloader=dataloader_valid, device=device,
-                 verbosity=test_verbosity, log_filepath=log_save_dir_validation, epoch=epoch)
+
+        writer.add_scalar('lr/train', lr, epoch)
+        writer.add_scalar('loss/train', loss_acc, epoch)
+        writer.add_scalar('loss_classifier/train',
+                            loss_classifier_acc, epoch)
+        writer.add_scalar('loss_box_reg/train', loss_box_reg_acc, epoch)
+        writer.add_scalar('loss_objectness/train',
+                            loss_objectness_acc, epoch)
+        writer.add_scalar('loss_rpn_box_reg/train',
+                            loss_rpn_box_reg_acc, epoch)
+
+        val_metrics = validate(model=model, dataloader=dataloader_valid, device=device,
+                               log_filepath=log_save_dir_validation, epoch=epoch)
+
+        writer.add_scalar('mAP@.5:.95/validation',
+                          val_metrics.get("mAP@.5:.95"), epoch)
+        writer.add_scalar('mAP@.5/validation',
+                          val_metrics.get("mAP@.5"), epoch)
+        writer.add_scalar('mAP@.75/validation',
+                          val_metrics.get("mAP@.75"), epoch)
+        writer.add_scalar('mAP@s/validation',
+                          val_metrics.get("mAP@s"), epoch)
+        writer.add_scalar('mAP@m/validation',
+                          val_metrics.get("mAP@m"), epoch)
+        writer.add_scalar('mAP@l/validation',
+                          val_metrics.get("mAP@l"), epoch)
+        writer.add_scalar('Recall/validation',
+                          val_metrics.get("Recall"), epoch)
 
         elite_model_criterion.calculate_metrics(epoch=epoch)
 
@@ -242,5 +290,6 @@ if __name__ == "__main__":
             'optimizer': optimizer.state_dict(),
             'lr_scheduler': lr_scheduler.state_dict(),
         }, os.path.join(model_save_dir, 'last.pt'))
-
+    
     experiment_data_plots(root_dir=log_save_dir, out_dir=plots_save_dir)
+    writer.close()

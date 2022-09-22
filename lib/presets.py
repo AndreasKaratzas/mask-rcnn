@@ -1,4 +1,6 @@
 
+import torch
+import torchvision
 import lib.transformation as T
 
 
@@ -37,3 +39,15 @@ class DetectionPresetEval:
 
     def __call__(self, img, target):
         return self.transforms(img, target)
+
+
+class DetectionPresetTest:
+    def __init__(self):
+
+        self.transform = torchvision.transforms.Compose([
+            torchvision.transforms.PILToTensor(),
+            torchvision.transforms.ConvertImageDtype(torch.float),
+        ])
+
+    def __call__(self, img):
+        return self.transform(img)

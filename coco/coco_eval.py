@@ -24,6 +24,7 @@ class CocoEvaluator(object):
 
         self.iou_types = iou_types
         self.coco_eval = {}
+        self.stats = []
         for iou_type in iou_types:
             self.coco_eval[iou_type] = COCOeval(coco_gt, iouType=iou_type)
 
@@ -59,17 +60,20 @@ class CocoEvaluator(object):
 
     def summarize(self):
         for iou_type, coco_eval in self.coco_eval.items():
-            print("IoU metric: {}".format(iou_type))
+            # print("IoU metric: {}".format(iou_type))
             val_metrics = coco_eval.summarize()
-            self.export(val_metrics, iou_type)
-    
-    def export(self, val_metrics, type_of_metric):
+            self.export(val_metrics)
+
+        for iou_type in val_metrics:
+            self.stats.append(np.around(iou_type['value'], decimals=3))
+
+    def export(self, val_metrics):
         with open(self.log_dir, "a") as f:
             for entry in val_metrics:
                 title = "".join(entry.get('title').split())
                 f.write(
                     f"{self.epoch:8d}{title:>20}{entry.get('IoU'):>15}"
-                    f"{entry.get('area'):>8}{int(entry.get('dets')):8d}{type_of_metric:>8}"
+                    f"{entry.get('area'):>8}{int(entry.get('dets')):8d}"
                     f"{round(float(entry.get('value')), 4):8.4f}\n"
                 )
 
@@ -123,7 +127,8 @@ class CocoEvaluator(object):
             labels = prediction["labels"].tolist()
 
             rles = [
-                mask_util.encode(np.array(mask[0, :, :, np.newaxis], dtype=np.uint8, order="F"))[0]
+                mask_util.encode(
+                    np.array(mask[0, :, :, np.newaxis], dtype=np.uint8, order="F"))[0]
                 for mask in masks
             ]
             for rle in rles:
@@ -167,6 +172,7 @@ class CocoEvaluator(object):
                 ]
             )
         return coco_results
+
 
 def convert_to_xywh(boxes):
     xmin, ymin, xmax, ymax = boxes.unbind(1)
@@ -224,7 +230,7 @@ def createIndex(self):
     if 'annotations' in self.dataset and 'categories' in self.dataset:
         for ann in self.dataset['annotations']:
             catToImgs[ann['category_id']].append(ann['image_id'])
-    
+
     self.anns = anns
     self.imgToAnns = imgToAnns
     self.catToImgs = catToImgs

@@ -93,3 +93,24 @@ class CustomDataset(Dataset):
 
     def __len__(self):
         return len(self.images)
+
+
+class TestDataset(Dataset):
+    def __init__(self, root_dir, transforms=None):
+        self.root_dir = root_dir
+        self.transforms = transforms
+        self.images = list(
+            sorted(os.listdir(os.path.join(root_dir, "images"))))
+
+    def __getitem__(self, idx):
+        img_path = os.path.join(self.root_dir, "images", self.images[idx])
+
+        img = Image.open(img_path).convert("RGB")
+
+        if self.transforms is not None:
+            img = self.transforms(img=img)
+
+        return img
+
+    def __len__(self):
+        return len(self.images)

@@ -6,11 +6,19 @@ from torchvision.transforms import functional as F
 from torchvision.transforms import transforms as T
 from typing import List, Tuple, Dict, Optional
 
-from lib.presets import DetectionPresetTrain, DetectionPresetEval
+from lib.presets import DetectionPresetTrain, DetectionPresetEval, DetectionPresetTest
 
 
-def get_transform(train, data_augmentation=None):
-    return DetectionPresetTrain(data_augmentation) if train else DetectionPresetEval()
+def get_transform(transform_class: str, data_augmentation=None):
+    if transform_class == "train":
+        return DetectionPresetTrain(data_augmentation)
+    elif transform_class == "valid":
+        return DetectionPresetEval()
+    elif transform_class == "test":
+        return DetectionPresetTest()
+    else:
+        raise ValueError(
+            f"Transformation preference was invalid. Value parsed was {transform_class}\n")
 
 
 def _flip_coco_person_keypoints(kps, width):

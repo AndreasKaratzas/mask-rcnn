@@ -7,9 +7,6 @@ __pycache__/
 # Virtual environment
 mask-rcnn/
 
-# Experiment data
-data/
-
 # Distribution / packaging
 .Python
 build/
