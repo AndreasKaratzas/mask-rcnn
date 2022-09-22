@@ -4,6 +4,12 @@ __pycache__/
 # C extensions
 *.so
 
+# Virtual environment
+mask-rcnn/
+
+# Experiment data
+data/
+
 # Distribution / packaging
 .Python
 build/

@@ -1,24 +1,23 @@
 # Custom Mask R-CNN implementation
 
 * TODO: Introduction to project
-* TODO: Delete this repository and uplaod everything from a new repository
 * TODO: Save from `Visual`, don't display
 * TODO: Check color list to be equal in element number to that of the masks
 
 ### Prerequisites
 
-The only prerequisite is [git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git) in order to clone the repository. The project was tested using a Python 3.8.3 interpreter.
+The only prerequisite is [git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git) in order to clone the repository. The project was tested using Python 3.8.3 and 3.9.7 interpreters, on a Windows 10 OS.
 
 ### Installation
 
 1. Open a terminal window
-2. Upgrade `pip` using `python -m pip install --upgrade pip`
-3. Clone repository using `git clone https://github.com/AndreasKaratzas/mask-rcnn.git`
-4. Navigate to project directory with `cd mask-rcnn`
-5. Create a virtual environment using `python -m venv ./venv`
+2. Clone repository using `git clone https://github.com/AndreasKaratzas/mask-rcnn.git`
+3. Navigate to project directory with `cd mask-rcnn`
+4. Create a virtual environment using `python -m venv ./venv`
+5. Upgrade `pip` using `python -m pip install --upgrade pip`
 6. Activate virtual environment with `./venv/Scripts/activate`
 7. Install requirements using `pip install -r requirements.txt`
-8. (Optional) To utilize your CUDA compatible GPU, use `pip install torch==1.9.0+cu111 torchvision==0.10.0+cu111 torchaudio===0.9.0 -f https://download.pytorch.org/whl/torch_stable.html`
+8. (Optional) To utilize your CUDA compatible GPU, use `pip install torch==1.10.0+cu102 torchvision==0.11.1+cu102 torchaudio===0.10.0+cu102 -f https://download.pytorch.org/whl/cu102/torch_stable.html`
 
 ### Usage
 

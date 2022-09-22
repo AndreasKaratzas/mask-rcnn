@@ -8,21 +8,20 @@ from torch.utils.data import Dataset
 
 
 class CustomDataset(Dataset):
-    def __init__(self, root_dir, child_dir: str = None, transforms=None):
+    def __init__(self, root_dir, transforms=None):
         self.root_dir = root_dir
         self.transforms = transforms
-        self.child_dir = child_dir
         self.images = list(
-            sorted(os.listdir(os.path.join(root_dir, "images", child_dir))))
+            sorted(os.listdir(os.path.join(root_dir, "images"))))
         self.masks = list(
-            sorted(os.listdir(os.path.join(root_dir, "masks", child_dir))))
+            sorted(os.listdir(os.path.join(root_dir, "masks"))))
 
     def __getitem__(self, idx):
-        img_path = os.path.join(self.root_dir, "images", self.child_dir, self.images[idx])
-        mask_path = os.path.join(self.root_dir, "masks", self.child_dir, self.masks[idx])
+        img_path = os.path.join(self.root_dir, "images", self.images[idx])
+        mask_path = os.path.join(self.root_dir, "masks", self.masks[idx])
 
         img = Image.open(img_path).convert("RGB")
-        mask = Image.open(mask_path)
+        mask = Image.open(mask_path).convert('L')
 
         # convert the PIL Image into a numpy array
         mask = np.array(mask)
@@ -44,13 +43,40 @@ class CustomDataset(Dataset):
             xmax = np.max(pos[1])
             ymin = np.min(pos[0])
             ymax = np.max(pos[0])
+
+            if xmin == xmax:
+                xmin -= 1
+                xmax += 1
+
+            if ymin == ymax:
+                ymin -= 1
+                ymax += 1
+
             boxes.append([xmin, ymin, xmax, ymax])
 
         # convert everything into a torch.Tensor
         boxes = torch.as_tensor(boxes, dtype=torch.float32)
+
+        labels = []
+        for label in obj_ids:
+            if label == 6:
+                labels.append(1)
+            elif label == 7:
+                labels.append(2)
+            elif label == 10:
+                labels.append(3)
+            else:
+                raise ValueError("Unknown label found")
+
         # there is only one class
-        labels = torch.ones((num_objs,), dtype=torch.int64)
+        labels = torch.as_tensor(labels, dtype=torch.int64)
         masks = torch.as_tensor(masks, dtype=torch.uint8)
+
+        if boxes.ndim == 1:
+            boxes = boxes.unsqueeze(0)
+
+        if labels.ndim < 1:
+            labels = labels.unsqueeze(0)
 
         image_id = torch.tensor([idx])
         area = (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])

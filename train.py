@@ -18,44 +18,65 @@ from lib.elitism import EliteModel
 from lib.dataloader import CustomDataset
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='PyTorch image segmentation with Mask R-CNN model.')
-    parser.add_argument('--root-dir', default='./data', help='Root directory to output data.')
-    parser.add_argument('--dataset', default='E:/fish_dataset/Gilt-Head_Bream', help='Path to dataset.')
-    parser.add_argument('--img-size', default=800, type=int, help='Minimum image size.')
-    parser.add_argument('--num-classes', default=2, type=int, help='Number of classes in dataset.')
-    parser.add_argument('--backbone', default='resnet50', help='Backbone CNN for Mask R-CNN.')
-    parser.add_argument('--batch-size', default=8, type=int, help='Batch size.')
-    parser.add_argument('--lr-scheduler', default="multisteplr", help='the lr scheduler (default: multisteplr).')
-    parser.add_argument('--epochs', default=10, type=int, metavar='N', help='Number of total epochs to run.')
+    parser = argparse.ArgumentParser(
+        description='PyTorch image segmentation with Mask R-CNN model.')
+    parser.add_argument('--root-dir', default='./data',
+                        help='Root directory to output data.')
+    parser.add_argument('--dataset', default='../data',
+                        help='Path to dataset.')
+    parser.add_argument('--img-size', default=800,
+                        type=int, help='Minimum image size.')
+    parser.add_argument('--num-classes', default=4, type=int,
+                        help='Number of classes in dataset.')
+    parser.add_argument('--backbone', default='resnet18',
+                        help='Backbone CNN for Mask R-CNN.')
+    parser.add_argument('--batch-size', default=4,
+                        type=int, help='Batch size.')
+    parser.add_argument('--lr-scheduler', default="multisteplr",
+                        help='the lr scheduler (default: multisteplr).')
+    parser.add_argument('--epochs', default=10, type=int,
+                        metavar='N', help='Number of total epochs to run.')
     parser.add_argument('--num-workers', default=1, type=int, metavar='N',
                         help='Number of data loading workers (default: 1).')
-    parser.add_argument('--lr', default=1e-3, type=float, help='Initial learning rate.')
-    parser.add_argument('--momentum', default=0.9, type=float, metavar='M', help='Momentum.')
-    parser.add_argument('--weight-decay', default=1e-4, type=float, metavar='W', help='weight decay (default: 1e-4).')
+    parser.add_argument('--lr', default=5e-3, type=float,
+                        help='Initial learning rate.')
+    parser.add_argument('--momentum', default=0.9,
+                        type=float, metavar='M', help='Momentum.')
+    parser.add_argument('--weight-decay', default=1e-4, type=float,
+                        metavar='W', help='weight decay (default: 1e-4).')
     parser.add_argument('--lr-steps', default=[16000, 22000], nargs='+', type=int,
                         help='Decrease lr every step-size epochs.')
-    parser.add_argument('--lr-gamma', default=0.1, type=float, help='Decrease lr by a factor of lr-gamma.')
-    parser.add_argument('--verbosity', default=5, type=int, help='Terminal log frequency.')
+    parser.add_argument('--lr-gamma', default=0.1, type=float,
+                        help='Decrease lr by a factor of lr-gamma.')
+    parser.add_argument('--verbosity', default=5, type=int,
+                        help='Terminal log frequency.')
     parser.add_argument('--resume', type=str, default=None,
                         help='Resume from given checkpoint. Expecting filepath to checkpoint.')
-    parser.add_argument('--data-augmentation', default="hflip", help='Data augmentation policy (default: hflip).')
-    parser.add_argument('--pretrained', default=True, help='Use pre-trained models.', action="store_true")
-    parser.add_argument('--anchor-sizes', default=[32, 64, 128, 256, 512], nargs='+', type=int, help='Anchor sizes.')
-    parser.add_argument('--aspect-ratios', default=[0.5, 1.0, 2.0], nargs='+', type=int, help='Anchor ratios.')
-    parser.add_argument('--start-epoch', default=0, type=int, help='Start epoch.')
+    parser.add_argument('--data-augmentation', default="hflip",
+                        help='Data augmentation policy (default: hflip).')
+    parser.add_argument('--pretrained', default=True,
+                        help='Use pre-trained models.', action="store_true")
+    parser.add_argument(
+        '--anchor-sizes', default=[32, 64, 128, 256, 512], nargs='+', type=int, help='Anchor sizes.')
+    parser.add_argument(
+        '--aspect-ratios', default=[0.5, 1.0, 2.0], nargs='+', type=int, help='Anchor ratios.')
+    parser.add_argument('--start-epoch', default=0,
+                        type=int, help='Start epoch.')
     args = parser.parse_args()
 
     if not Path(args.root_dir).is_dir():
-        raise ValueError(f"Root directory is invalid. Value parsed {args.root_dir}.")
+        raise ValueError(
+            f"Root directory is invalid. Value parsed {args.root_dir}.")
     if not Path(args.dataset).is_dir():
-        raise ValueError(f"Path to dataset is invalid. Value parsed {args.dataset}.")
-    if not os.path.isdir(os.path.join(args.dataset, "images", "train")):
+        raise ValueError(
+            f"Path to dataset is invalid. Value parsed {args.dataset}.")
+    if not os.path.isdir(os.path.join(args.dataset, "train", "images")):
         raise ValueError(f"Path to training image data does not exist.")
-    if not os.path.isdir(os.path.join(args.dataset, "masks", "train")):
+    if not os.path.isdir(os.path.join(args.dataset, "train", "masks")):
         raise ValueError(f"Path to training label data does not exist.")
-    if not os.path.isdir(os.path.join(args.dataset, "images", "val")):
+    if not os.path.isdir(os.path.join(args.dataset, "valid", "images")):
         raise ValueError(f"Path to validation image data does not exist.")
-    if not os.path.isdir(os.path.join(args.dataset, "masks", "val")):
+    if not os.path.isdir(os.path.join(args.dataset, "valid", "masks")):
         raise ValueError(f"Path to validation label data does not exist.")
 
     # initialize the computation device
@@ -63,15 +84,13 @@ if __name__ == "__main__":
 
     # dataloader training
     train_data = CustomDataset(
-        root_dir=args.dataset,
-        child_dir="train",
+        root_dir=os.path.join(args.dataset, "train"),
         transforms=get_transform(True, args.data_augmentation)
     )
 
     # dataloader validation
     val_data = CustomDataset(
-        root_dir=args.dataset,
-        child_dir="val",
+        root_dir=os.path.join(args.dataset, "valid"),
         transforms=get_transform(False, args.data_augmentation)
     )
 
@@ -104,6 +123,7 @@ if __name__ == "__main__":
         backbone_name=args.backbone,
         anchor_sizes=args.anchor_sizes,
         aspect_ratios=args.aspect_ratios,
+        num_classes=args.num_classes,
         min_size=args.img_size
     )
 
