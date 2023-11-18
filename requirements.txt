@@ -8,7 +8,7 @@ matplotlib~=3.4.3
 pathlib~=1.0.1
 numpy~=1.21.2
 DateTime~=4.3
-Pillow~=8.3.1
+Pillow~=9.1.1
 opencv-python~=4.5.3.56
 tqdm~=4.62.1
 pycocotools==2.0.2
